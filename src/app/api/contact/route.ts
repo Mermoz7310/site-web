@@ -1,65 +1,70 @@
 import { NextResponse } from "next/server";
+import { Resend } from "resend";
 
 /**
- * Endpoint de contact — prêt à brancher.
+ * Endpoint de contact — envoie un email via Resend.
  *
- * Pour activer l'envoi d'email, décommentez l'un des blocs ci-dessous
- * et ajoutez la clé correspondante dans .env.local :
+ * Variables d'environnement nécessaires (dans Vercel et en local .env.local) :
+ *   RESEND_API_KEY   → ta clé Resend (re_...)
+ *   CONTACT_TO       → (optionnel) email de réception. Défaut : assndiaye4@gmail.com
+ *   CONTACT_FROM     → (optionnel) expéditeur. Défaut : onboarding@resend.dev (mode test)
  *
- *  - Resend  : RESEND_API_KEY
- *  - Brevo   : BREVO_API_KEY
- *  - Supabase: NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
- *
- * Côté client, remplacez le setTimeout de Contact.tsx par :
- *   await fetch("/api/contact", { method: "POST", body: JSON.stringify(data) })
+ * En mode test (onboarding@resend.dev), les emails n'arrivent QUE sur
+ * l'adresse de ton compte Resend (assndiaye4@gmail.com).
+ * Une fois le domaine 221belcode.com vérifié, passe CONTACT_FROM à
+ * contact@221belcode.com pour envoyer vers n'importe quelle adresse.
  */
 export async function POST(request: Request) {
   try {
     const data = await request.json();
+    const { name, company, email, phone, message } = data ?? {};
 
-    if (!data?.email || !data?.name || !data?.message) {
+    if (!name || !email || !message) {
       return NextResponse.json(
         { error: "Champs requis manquants." },
         { status: 400 }
       );
     }
 
-    // --- Option A : Resend ---
-    // const { Resend } = await import("resend");
-    // const resend = new Resend(process.env.RESEND_API_KEY);
-    // await resend.emails.send({
-    //   from: "contact@221belcode.com",
-    //   to: "contact@221belcode.com",
-    //   subject: `Nouveau projet — ${data.name}`,
-    //   replyTo: data.email,
-    //   text: `${data.name} (${data.company ?? "—"})\n${data.email} · ${data.phone ?? "—"}\n\n${data.message}`,
-    // });
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      // Pas de clé configurée : on log et on renvoie une erreur claire.
+      console.error("RESEND_API_KEY manquante.");
+      return NextResponse.json(
+        { error: "Service email non configuré." },
+        { status: 500 }
+      );
+    }
 
-    // --- Option B : Brevo (API transactionnelle) ---
-    // await fetch("https://api.brevo.com/v3/smtp/email", {
-    //   method: "POST",
-    //   headers: {
-    //     "api-key": process.env.BREVO_API_KEY!,
-    //     "Content-Type": "application/json",
-    //   },
-    //   body: JSON.stringify({
-    //     sender: { email: "contact@221belcode.com", name: "221BelCode" },
-    //     to: [{ email: "contact@221belcode.com" }],
-    //     subject: `Nouveau projet — ${data.name}`,
-    //     textContent: data.message,
-    //   }),
-    // });
+    const resend = new Resend(apiKey);
+    const to = process.env.CONTACT_TO || "assndiaye4@gmail.com";
+    const from = process.env.CONTACT_FROM || "221BelCode <onboarding@resend.dev>";
 
-    // --- Option C : Supabase (insertion en base) ---
-    // import { createClient } from "@supabase/supabase-js";
-    // const supabase = createClient(
-    //   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    //   process.env.SUPABASE_SERVICE_ROLE_KEY!
-    // );
-    // await supabase.from("leads").insert(data);
+    const { error } = await resend.emails.send({
+      from,
+      to,
+      replyTo: email,
+      subject: `Nouvelle demande de devis — ${name}`,
+      text:
+        `Nouvelle demande depuis le site 221BelCode\n\n` +
+        `Nom : ${name}\n` +
+        `Entreprise : ${company || "—"}\n` +
+        `Email : ${email}\n` +
+        `Téléphone : ${phone || "—"}\n\n` +
+        `Message :\n${message}\n`,
+    });
+
+    if (error) {
+      console.error("Erreur Resend:", error);
+      return NextResponse.json(
+        { error: "L'envoi a échoué. Réessayez." },
+        { status: 502 }
+      );
+    }
 
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (err) {
+    console.error("Erreur contact:", err);
     return NextResponse.json(
       { error: "Une erreur est survenue. Réessayez." },
       { status: 500 }

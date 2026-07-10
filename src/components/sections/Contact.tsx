@@ -21,6 +21,7 @@ type FormData = z.infer<typeof schema>;
 
 export function Contact() {
   const [sent, setSent] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const {
     register,
     handleSubmit,
@@ -29,19 +30,22 @@ export function Contact() {
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
   const onSubmit = async (data: FormData) => {
-    // Envoie vers /api/contact. En l'absence de clé email configurée,
-    // la route répond quand même ok:true (voir src/app/api/contact/route.ts).
+    setSendError(null);
     try {
-      await fetch("/api/contact", {
+      const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
+      if (!res.ok) {
+        setSendError("L'envoi a échoué. Réessayez ou écrivez-nous par email.");
+        return;
+      }
+      setSent(true);
+      reset();
     } catch {
-      // silencieux : on confirme quand même à l'utilisateur en démo
+      setSendError("Impossible d'envoyer le message. Vérifiez votre connexion.");
     }
-    setSent(true);
-    reset();
   };
 
   const inputClass =
@@ -171,6 +175,12 @@ export function Contact() {
                   />
                   {errors.message && <p className="mt-1 text-xs text-red-400">{errors.message.message}</p>}
                 </div>
+
+                {sendError && (
+                  <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-2.5">
+                    {sendError}
+                  </p>
+                )}
 
                 <motion.button
                   type="submit"
