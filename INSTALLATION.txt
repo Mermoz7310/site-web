@@ -1,0 +1,78 @@
+=================================================
+  221BelCode — PROJET COMPLET À JOUR (avec images)
+=================================================
+
+Ce dossier "belcode" est la version complète et corrigée,
+avec les 4 images de projets déjà intégrées et le code réparé.
+
+------------------------------------------------
+  ÉTAPE 1 — Remplacer l'ancien dossier
+------------------------------------------------
+
+1. Ferme VS Code / PowerShell / le serveur (Ctrl+C) s'ils tournent.
+
+2. Sur ton Bureau, RENOMME l'ancien dossier :
+      belcode   →   belcode-ancien
+   (garde-le au cas où, on le supprimera plus tard)
+
+3. Récupère TES 2 vraies captures dans l'ancien dossier :
+      belcode-ancien\public\projects\educonnect.png
+      belcode-ancien\public\projects\qr-inventaire.png
+
+4. Décompresse ce zip sur le Bureau → tu obtiens un nouveau "belcode".
+
+5. Copie tes 2 images (educonnect.png + qr-inventaire.png) dans :
+      belcode\public\projects\
+   (il y a déjà les 4 autres images : samaschool, facturepilote,
+    carehome-pro, immoteranga)
+
+------------------------------------------------
+  ÉTAPE 2 — Réinstaller et tester
+------------------------------------------------
+
+Ouvre PowerShell dans le nouveau dossier :
+
+   cd C:\Users\cara\Desktop\belcode
+   npm install
+   npm run dev
+
+→ Ouvre http://localhost:3000 et vérifie la section "Réalisations".
+   Les 6 cartes doivent afficher leurs images.
+
+(Si educonnect.png ou qr-inventaire.png manque, la carte affiche
+ juste un joli dégradé — aucune erreur, c'est prévu.)
+
+------------------------------------------------
+  ÉTAPE 3 — Remettre en ligne (GitHub + Vercel)
+------------------------------------------------
+
+Toujours dans PowerShell :
+
+   git add .
+   git commit -m "Projet complet a jour avec images projets"
+   git push
+
+→ Vercel redéploie automatiquement en ~1 minute.
+
+Note : le dossier .git n'est PAS dans ce zip. Comme tu réutilises
+le même dossier local relié à GitHub, si "git push" dit qu'il n'y a
+pas de dépôt, relie-le avec :
+
+   git init
+   git remote add origin https://github.com/Mermoz7310/site-web.git
+   git add .
+   git commit -m "Projet complet a jour avec images projets"
+   git branch -M main
+   git push -u origin main --force
+
+(le --force écrase l'ancienne version en ligne par la nouvelle,
+ c'est voulu ici.)
+
+------------------------------------------------
+  RÉCAP DE CE QUI A CHANGÉ
+------------------------------------------------
+- src/data/site.ts .................. images des projets ajoutées
+- src/components/sections/Projects.tsx  affichage image + fallback
+- public/projects/ .................. 4 mockups ajoutés
+- "Éducation Coranique" ............. déjà retirée
+Tout le reste est identique à ta version en ligne.
