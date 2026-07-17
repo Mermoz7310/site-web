@@ -42,6 +42,7 @@ export default function DiagnosticPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ApiResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [demoSent, setDemoSent] = useState(false);
 
   // état du formulaire
   const [description, setDescription] = useState("");
@@ -86,6 +87,25 @@ export default function DiagnosticPage() {
   }
 
   const canStart = description.trim() && secteur && canaux.length > 0;
+
+  // Envoi d'une demande de démo (2e appel léger, ne remplace pas le diagnostic affiché)
+  async function bookDemo() {
+    try {
+      await fetch("/api/diagnostic", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          description, secteur, canaux,
+          cmdJour, minParCmd, tauxErreur, coutErreur,
+          credit, absence,
+          name, company, phone, cta: "demo",
+        }),
+      });
+    } catch {
+      /* on confirme quand même côté prospect */
+    }
+    setDemoSent(true);
+  }
 
   return (
     <div className="dg-page-bg">
@@ -227,7 +247,8 @@ export default function DiagnosticPage() {
         {/* STEP 5 — résultat */}
         {step === 5 && result && (
           <ResultView result={result} secteurCanal={canaux[0] || "WhatsApp"} cmdJour={cmdJour} minParCmd={minParCmd} tauxErreur={tauxErreur} coutErreur={coutErreur}
-            onRestart={() => { setStep(0); setResult(null); }} onCta={() => submit("demo")} />
+            demoSent={demoSent}
+            onRestart={() => { setStep(0); setResult(null); setDemoSent(false); }} onCta={bookDemo} />
         )}
 
         <div className="dg-foot">Diagnostic confidentiel · Aucune donnée revendue · ~2 minutes</div>
@@ -237,10 +258,10 @@ export default function DiagnosticPage() {
 }
 
 function ResultView({
-  result, secteurCanal, cmdJour, minParCmd, tauxErreur, coutErreur, onRestart, onCta,
+  result, secteurCanal, cmdJour, minParCmd, tauxErreur, coutErreur, demoSent, onRestart, onCta,
 }: {
   result: ApiResult; secteurCanal: string; cmdJour: number; minParCmd: number;
-  tauxErreur: string; coutErreur: number; onRestart: () => void; onCta: () => void;
+  tauxErreur: string; coutErreur: number; demoSent: boolean; onRestart: () => void; onCta: () => void;
 }) {
   // niche autre que commandes → message simple
   if (result.partiel || !result.calc) {
@@ -294,12 +315,24 @@ function ResultView({
         </div>
       )}
 
-      <div className="dg-card" style={{ textAlign: "center" }}>
-        <div className="dg-tag" style={{ marginBottom: 12 }}>Score d&apos;opportunité : {sc}/30 · {interp}</div>
-        <h2 className="dg-h2" style={{ marginBottom: 6 }}>Envie de voir ça sur vos vraies commandes ?</h2>
-        <p className="dg-lede" style={{ marginBottom: 16 }}>Démo de 20 min, sans engagement.</p>
-        <button className="dg-btn gold" onClick={onCta}>Réserver ma démo gratuite</button>
-      </div>
+      {demoSent ? (
+        <div className="dg-card" style={{ textAlign: "center" }}>
+          <div className="dg-checkbig">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l5 5L20 6" stroke="#0B6E4F" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </div>
+          <h2 className="dg-h2" style={{ marginBottom: 6 }}>C&apos;est noté, merci !</h2>
+          <p className="dg-lede" style={{ marginBottom: 0 }}>
+            Un conseiller 221BelCode vous recontacte très vite au numéro que vous avez indiqué, pour organiser votre démo. À très bientôt.
+          </p>
+        </div>
+      ) : (
+        <div className="dg-card" style={{ textAlign: "center" }}>
+          <div className="dg-tag" style={{ marginBottom: 12 }}>Score d&apos;opportunité : {sc}/30 · {interp}</div>
+          <h2 className="dg-h2" style={{ marginBottom: 6 }}>Envie de voir ça sur vos vraies commandes ?</h2>
+          <p className="dg-lede" style={{ marginBottom: 16 }}>Démo de 20 min, sans engagement.</p>
+          <button className="dg-btn gold" onClick={onCta}>Réserver ma démo gratuite</button>
+        </div>
+      )}
 
       <div className="dg-nav">
         <button className="dg-btn ghost" style={{ flex: 1 }} onClick={onRestart}>↺ Recommencer</button>
@@ -392,4 +425,6 @@ const css = `
 @keyframes dgfade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .dg-spin{display:inline-block;width:16px;height:16px;border:2px solid #fff5;border-top-color:#fff;border-radius:50%;animation:dgsp .7s linear infinite}
 @keyframes dgsp{to{transform:rotate(360deg)}}
+.dg-checkbig{width:56px;height:56px;border-radius:50%;background:#f1f8f4;border:2px solid #bfe0cd;display:grid;place-items:center;margin:0 auto 14px}
+.dg-checkbig svg{width:28px;height:28px}
 `;
