@@ -1,5 +1,4 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
@@ -10,14 +9,12 @@ import { navLinks } from "@/data/site";
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
-
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 16);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
-
   return (
     <header className="fixed top-0 inset-x-0 z-50">
       <motion.nav
@@ -36,7 +33,6 @@ export function Navbar() {
           <a href="#top" aria-label="221BelCode — accueil">
             <Logo />
           </a>
-
           <ul className="hidden lg:flex items-center gap-1">
             {navLinks.map((link) => (
               <li key={link.href}>
@@ -49,11 +45,15 @@ export function Navbar() {
               </li>
             ))}
           </ul>
-
-          <div className="hidden lg:block">
+          <div className="hidden lg:flex items-center gap-2">
+            <a
+              href="/diagnostic"
+              className="px-4 py-2 text-sm font-medium text-[var(--color-brand-cyan)] hover:text-[var(--color-ink)] rounded-lg hover:bg-white/5 transition-colors"
+            >
+              Diagnostic gratuit
+            </a>
             <Button href="#contact">Demander un devis</Button>
           </div>
-
           <button
             className="lg:hidden grid place-items-center h-10 w-10 rounded-lg text-[var(--color-ink)] hover:bg-white/5"
             onClick={() => setOpen((v) => !v)}
@@ -63,7 +63,6 @@ export function Navbar() {
             {open ? <X size={22} /> : <Menu size={22} />}
           </button>
         </div>
-
         <AnimatePresence>
           {open && (
             <motion.div
@@ -85,7 +84,14 @@ export function Navbar() {
                     </a>
                   </li>
                 ))}
-                <li className="p-2">
+                <li className="p-2 space-y-2">
+                  <a
+                    href="/diagnostic"
+                    onClick={() => setOpen(false)}
+                    className="block text-center rounded-full px-6 py-3 text-sm font-semibold text-[var(--color-brand-cyan)] border border-[var(--color-border-glow)]"
+                  >
+                    Diagnostic gratuit
+                  </a>
                   <a
                     href="#contact"
                     onClick={() => setOpen(false)}
