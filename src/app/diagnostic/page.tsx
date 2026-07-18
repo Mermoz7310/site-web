@@ -3,9 +3,11 @@
 import { useState } from "react";
 
 /* ============================================================
-   221BelCode — Page Diagnostic (/diagnostic)
-   Appelle /api/diagnostic → workflow n8n → Claude + moteur.
-   Design : vert 221 + or + terracotta (pertes), mobile-first.
+   221BelCode — Page Diagnostic (/diagnostic) — version 2 temps
+   1. Description libre  -> /api/diagnostic-niche (Claude détecte)
+   2. Écran "voici votre besoin" (corrigeable)
+   3. Questions de LA niche détectée
+   4. /api/diagnostic -> diagnostic complet
    ============================================================ */
 
 type Calc = {
@@ -16,44 +18,69 @@ type Calc = {
   prixSaaS: number;
 };
 type ApiResult = {
-  ok: boolean;
-  niche?: string;
-  confiance?: string;
-  score?: number;
-  calc?: Calc;
-  apercu?: string;
-  partiel?: boolean;
+  ok: boolean; niche?: string; confiance?: string; score?: number;
+  calc?: Calc; apercu?: string; partiel?: boolean;
 };
 
 const CANAUX = ["WhatsApp", "Appel", "Message vocal", "Cahier", "Excel"];
 const SECTEURS = [
-  { v: "grossiste", l: "Grossiste" },
-  { v: "quincaillerie", l: "Quincaillerie" },
-  { v: "alimentaire", l: "Alimentaire" },
+  { v: "grossiste", l: "Grossiste / distribution" },
+  { v: "quincaillerie", l: "Quincaillerie / matériaux" },
+  { v: "alimentaire", l: "Alimentaire / boissons" },
   { v: "services", l: "Services / terrain" },
+  { v: "btp", l: "BTP / maintenance" },
   { v: "autre", l: "Autre" },
 ];
+
+const NICHE_LABELS: Record<string, { titre: string; desc: string }> = {
+  commandes: { titre: "Gestion des commandes", desc: "Recevoir, saisir et suivre les commandes de vos clients" },
+  interventions: { titre: "Suivi des interventions terrain", desc: "Piloter vos agents sur site et prouver le travail fait" },
+  validations: { titre: "Validations internes", desc: "Autoriser et tracer les demandes de vos équipes" },
+  materiel: { titre: "Gestion du matériel", desc: "Suivre vos équipements, qui les détient et où ils sont" },
+  autre: { titre: "Besoin spécifique", desc: "Votre besoin sort de nos 4 solutions standard" },
+};
 
 const fcfa = (n: number) =>
   Math.round(n).toLocaleString("fr-FR").replace(/\u202f/g, " ") + " FCFA";
 
 export default function DiagnosticPage() {
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(0); // 0=description 1=niche 2=questions 3=coords 5=résultat
   const [loading, setLoading] = useState(false);
+  const [detecting, setDetecting] = useState(false);
   const [result, setResult] = useState<ApiResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [demoSent, setDemoSent] = useState(false);
 
-  // état du formulaire
+  // étape 1
   const [description, setDescription] = useState("");
   const [secteur, setSecteur] = useState<string | null>(null);
   const [canaux, setCanaux] = useState<string[]>([]);
+
+  // niche détectée
+  const [niche, setNiche] = useState<string | null>(null);
+  const [confiance, setConfiance] = useState<string>("");
+  const [justif, setJustif] = useState<string>("");
+  const [correcting, setCorrecting] = useState(false);
+
+  // questions COMMANDES
   const [cmdJour, setCmdJour] = useState(30);
   const [minParCmd, setMinParCmd] = useState(4);
   const [tauxErreur, setTauxErreur] = useState("parfois");
   const [coutErreur, setCoutErreur] = useState(15000);
   const [credit, setCredit] = useState<string | null>(null);
   const [absence, setAbsence] = useState<string | null>(null);
+
+  // questions INTERVENTIONS
+  const [nbAgents, setNbAgents] = useState(10);
+  const [intervJour, setIntervJour] = useState(12);
+  const [minCoordJour, setMinCoordJour] = useState(60);
+  const [tauxLitige, setTauxLitige] = useState("parfois");
+  const [coutLitige, setCoutLitige] = useState(20000);
+  const [retards, setRetards] = useState("parfois");
+  const [heuresAgentJour, setHeuresAgentJour] = useState(8);
+  const [preuve, setPreuve] = useState<string | null>(null);
+
+  // coordonnées
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
   const [phone, setPhone] = useState("");
@@ -61,50 +88,67 @@ export default function DiagnosticPage() {
   const toggleCanal = (c: string) =>
     setCanaux((p) => (p.includes(c) ? p.filter((x) => x !== c) : [...p, c]));
 
+  // ---- étape 1 : détection ----
+  async function detectNiche() {
+    setDetecting(true); setErr(null);
+    try {
+      const r = await fetch("/api/diagnostic-niche", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description, secteur, canaux }),
+      });
+      const d = await r.json();
+      if (!r.ok || !d.ok) throw new Error("Analyse impossible. Réessayez.");
+      setNiche(d.niche); setConfiance(d.confiance || ""); setJustif(d.justification || "");
+      setStep(1);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Erreur inconnue");
+    } finally { setDetecting(false); }
+  }
+
+  // ---- payload selon la niche ----
+  function buildPayload(cta: string) {
+    const base = { description, secteur, canaux, niche, name, company, phone, cta };
+    if (niche === "commandes") {
+      return { ...base, cmdJour, minParCmd, tauxErreur, coutErreur, credit, absence };
+    }
+    if (niche === "interventions") {
+      return { ...base, nbAgents, intervJour, minCoordJour, tauxLitige, coutLitige, retards, heuresAgentJour, preuve };
+    }
+    return base;
+  }
+
+  // ---- étape finale : diagnostic ----
   async function submit(cta: string) {
-    setLoading(true);
-    setErr(null);
+    setLoading(true); setErr(null);
     try {
       const r = await fetch("/api/diagnostic", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          description, secteur, canaux,
-          cmdJour, minParCmd, tauxErreur, coutErreur,
-          credit, absence,
-          name, company, phone, cta,
-        }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPayload(cta)),
       });
       const data: ApiResult = await r.json();
       if (!r.ok || !data.ok) throw new Error("Une erreur est survenue. Réessayez.");
-      setResult(data);
-      setStep(5);
+      setResult(data); setStep(5);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Erreur inconnue");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
-  const canStart = description.trim() && secteur && canaux.length > 0;
-
-  // Envoi d'une demande de démo (2e appel léger, ne remplace pas le diagnostic affiché)
   async function bookDemo() {
     try {
       await fetch("/api/diagnostic", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          description, secteur, canaux,
-          cmdJour, minParCmd, tauxErreur, coutErreur,
-          credit, absence,
-          name, company, phone, cta: "demo",
-        }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPayload("demo")),
       });
-    } catch {
-      /* on confirme quand même côté prospect */
-    }
+    } catch { /* on confirme quand même */ }
     setDemoSent(true);
+  }
+
+  const canStart = description.trim().length > 10 && secteur && canaux.length > 0;
+  const hasEngine = niche === "commandes" || niche === "interventions";
+  const railStep = step === 0 ? 0 : step === 1 ? 1 : step === 2 ? 2 : 3;
+
+  function resetAll() {
+    setStep(0); setResult(null); setDemoSent(false); setNiche(null); setCorrecting(false);
   }
 
   return (
@@ -117,11 +161,11 @@ export default function DiagnosticPage() {
         </div>
         <div className="dg-rail">
           {[0, 1, 2, 3].map((i) => (
-            <i key={i} className={step > i ? "done" : step === i ? "on" : ""} />
+            <i key={i} className={railStep > i ? "done" : railStep === i ? "on" : ""} />
           ))}
         </div>
 
-        {/* STEP 0 — description libre */}
+        {/* ÉTAPE 0 — description */}
         {step === 0 && (
           <div className="dg-fade">
             <div className="dg-eyebrow"><span className="dot" />Étape 1 · Votre activité</div>
@@ -129,7 +173,7 @@ export default function DiagnosticPage() {
             <p className="dg-lede">Décrivez avec vos mots comment ça se passe chez vous. Notre assistant identifiera votre besoin.</p>
             <div className="dg-card">
               <div className="dg-q">Racontez-nous votre quotidien</div>
-              <div className="dg-hint">Ex : « Je vends du matériel, mes clients commandent sur WhatsApp, je recopie tout à la main et j&apos;oublie parfois des commandes. »</div>
+              <div className="dg-hint">Ex : « J&apos;ai 10 agents qui vont chez des clients, je ne sais jamais s&apos;ils sont arrivés à l&apos;heure. » ou « Mes clients commandent sur WhatsApp, je recopie tout à la main. »</div>
               <textarea className="dg-ta" value={description} onChange={(e) => setDescription(e.target.value)}
                 placeholder="Décrivez votre activité et ce qui vous fait perdre du temps…" />
             </div>
@@ -144,7 +188,7 @@ export default function DiagnosticPage() {
               </div>
             </div>
             <div className="dg-card">
-              <div className="dg-q">Vos canaux (plusieurs choix)</div>
+              <div className="dg-q">Vos outils actuels (plusieurs choix)</div>
               <div className="dg-opts grid">
                 {CANAUX.map((c) => (
                   <div key={c} className={"dg-opt " + (canaux.includes(c) ? "sel" : "")} onClick={() => toggleCanal(c)}>
@@ -153,18 +197,80 @@ export default function DiagnosticPage() {
                 ))}
               </div>
             </div>
+            {err && <div className="dg-err">{err}</div>}
             <div className="dg-nav">
-              <button className="dg-btn primary" disabled={!canStart} onClick={() => setStep(2)}>Analyser mon besoin →</button>
+              <button className="dg-btn primary" disabled={!canStart || detecting} onClick={detectNiche}>
+                {detecting ? <><span className="dg-spin" /> Analyse en cours…</> : "Analyser mon besoin →"}
+              </button>
             </div>
           </div>
         )}
 
-        {/* STEP 2 — questions chiffrées */}
-        {step === 2 && (
+        {/* ÉTAPE 1 — niche détectée */}
+        {step === 1 && niche && (
+          <div className="dg-fade">
+            <div className="dg-eyebrow"><span className="dot" />Analyse terminée</div>
+            <div className="dg-agent">
+              <div className="dg-av">IA</div>
+              <div className="dg-msg">
+                <div className="dg-who">Assistant 221BelCode</div>
+                D&apos;après votre description, votre enjeu principal concerne <b>{NICHE_LABELS[niche]?.titre.toLowerCase()}</b>.
+                {justif && <div style={{ marginTop: 8, opacity: .8, fontSize: 13 }}>{justif}</div>}
+                <div style={{ marginTop: 10 }}>
+                  <span className="dg-tag">● {NICHE_LABELS[niche]?.titre} · confiance {confiance}</span>
+                </div>
+              </div>
+            </div>
+
+            {!correcting ? (
+              <>
+                <div className="dg-card">
+                  <div className="dg-q">{NICHE_LABELS[niche]?.titre}</div>
+                  <div className="dg-hint" style={{ marginBottom: 0 }}>{NICHE_LABELS[niche]?.desc}</div>
+                </div>
+                <div className="dg-nav" style={{ flexDirection: "column" }}>
+                  <button className="dg-btn primary" onClick={() => setStep(hasEngine ? 2 : 3)}>
+                    {hasEngine ? "C'est bien ça, continuer →" : "Continuer →"}
+                  </button>
+                  <button className="dg-btn ghost" style={{ flex: 1 }} onClick={() => setCorrecting(true)}>
+                    Ce n&apos;est pas mon besoin principal
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="dg-card">
+                  <div className="dg-q">Quel est votre besoin principal ?</div>
+                  <div className="dg-hint">Choisissez celui qui vous correspond le mieux.</div>
+                  <div className="dg-opts">
+                    {Object.entries(NICHE_LABELS).map(([k, v]) => (
+                      <div key={k} className={"dg-opt radio " + (niche === k ? "sel" : "")} onClick={() => setNiche(k)}>
+                        <div className="dg-box"><Check /></div>
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{v.titre}</div>
+                          <div style={{ fontSize: 12.5, opacity: .7 }}>{v.desc}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="dg-nav">
+                  <button className="dg-btn ghost" onClick={() => setCorrecting(false)}>←</button>
+                  <button className="dg-btn primary" onClick={() => { setCorrecting(false); setStep(hasEngine ? 2 : 3); }}>
+                    Valider →
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ÉTAPE 2 — questions COMMANDES */}
+        {step === 2 && niche === "commandes" && (
           <div className="dg-fade">
             <div className="dg-eyebrow"><span className="dot" />Étape 2 · Vos chiffres</div>
             <h2 className="dg-h2">Parlons de votre volume réel.</h2>
-            <p className="dg-lede">Une estimation suffit. Ces réponses calculent vos pertes.</p>
+            <p className="dg-lede">Une estimation suffit.</p>
             <div className="dg-card">
               <div className="dg-q">Combien de commandes par jour ?</div>
               <div className="dg-inrow"><span className="dg-slideval">{cmdJour}</span><span className="dg-unit">commandes / jour</span></div>
@@ -178,54 +284,100 @@ export default function DiagnosticPage() {
             <div className="dg-card">
               <div className="dg-q">Fréquence des erreurs ?</div>
               <div className="dg-hint">Mauvaise quantité, mauvais produit, oubli.</div>
-              <div className="dg-opts">
-                {[{ v: "rare", l: "Rare — 1 sur 100" }, { v: "parfois", l: "Parfois — 3 sur 100" }, { v: "souvent", l: "Souvent — 7+ sur 100" }].map((o) => (
-                  <div key={o.v} className={"dg-opt radio " + (tauxErreur === o.v ? "sel" : "")} onClick={() => setTauxErreur(o.v)}>
-                    <div className="dg-box"><Check /></div><div>{o.l}</div>
-                  </div>
-                ))}
-              </div>
+              <Radio value={tauxErreur} onChange={setTauxErreur} options={[
+                { v: "rare", l: "Rare — 1 sur 100" }, { v: "parfois", l: "Parfois — 3 sur 100" }, { v: "souvent", l: "Souvent — 7+ sur 100" }]} />
             </div>
             <div className="dg-card">
               <div className="dg-q">Coût moyen d&apos;une erreur ?</div>
-              <div className="dg-hint">Reprise, re-livraison, produit perdu.</div>
               <div className="dg-inrow">
                 <input type="number" className="dg-num" value={coutErreur} step={1000} onChange={(e) => setCoutErreur(+e.target.value || 0)} />
                 <span className="dg-unit">FCFA</span>
               </div>
             </div>
+            <div className="dg-card">
+              <div className="dg-q">Vendez-vous à crédit ?</div>
+              <Radio value={credit} onChange={setCredit} options={[
+                { v: "oui_suivi", l: "Oui, et c'est dur à suivre" }, { v: "oui_ok", l: "Oui, mais je gère" }, { v: "non", l: "Non" }]} />
+            </div>
+            <div className="dg-card">
+              <div className="dg-q">Quand vous êtes absent, les commandes…</div>
+              <Radio value={absence} onChange={setAbsence} options={[
+                { v: "bloque", l: "…s'arrêtent ou prennent du retard" }, { v: "erreurs", l: "…continuent avec plus d'erreurs" }, { v: "ok", l: "…tournent sans moi" }]} />
+            </div>
             <div className="dg-nav">
-              <button className="dg-btn ghost" onClick={() => setStep(0)}>←</button>
-              <button className="dg-btn primary" onClick={() => setStep(3)}>Continuer →</button>
+              <button className="dg-btn ghost" onClick={() => setStep(1)}>←</button>
+              <button className="dg-btn primary" disabled={!credit || !absence} onClick={() => setStep(3)}>Continuer →</button>
             </div>
           </div>
         )}
 
-        {/* STEP 3 — contexte + coordonnées */}
+        {/* ÉTAPE 2 — questions INTERVENTIONS */}
+        {step === 2 && niche === "interventions" && (
+          <div className="dg-fade">
+            <div className="dg-eyebrow"><span className="dot" />Étape 2 · Votre équipe terrain</div>
+            <h2 className="dg-h2">Parlons de vos agents et interventions.</h2>
+            <p className="dg-lede">Une estimation suffit.</p>
+            <div className="dg-card">
+              <div className="dg-q">Combien d&apos;agents travaillent sur le terrain ?</div>
+              <div className="dg-inrow"><span className="dg-slideval">{nbAgents}</span><span className="dg-unit">agents</span></div>
+              <input type="range" min={1} max={80} value={nbAgents} onChange={(e) => setNbAgents(+e.target.value)} className="dg-range" />
+            </div>
+            <div className="dg-card">
+              <div className="dg-q">Combien d&apos;interventions par jour (toute l&apos;équipe) ?</div>
+              <div className="dg-inrow"><span className="dg-slideval">{intervJour}</span><span className="dg-unit">interventions / jour</span></div>
+              <input type="range" min={1} max={100} value={intervJour} onChange={(e) => setIntervJour(+e.target.value)} className="dg-range" />
+            </div>
+            <div className="dg-card">
+              <div className="dg-q">Temps passé chaque jour à appeler / suivre vos agents ?</div>
+              <div className="dg-hint">Les appels pour savoir où ils en sont, s&apos;ils sont arrivés…</div>
+              <div className="dg-inrow"><span className="dg-slideval">{minCoordJour}</span><span className="dg-unit">minutes / jour</span></div>
+              <input type="range" min={0} max={300} step={10} value={minCoordJour} onChange={(e) => setMinCoordJour(+e.target.value)} className="dg-range" />
+            </div>
+            <div className="dg-card">
+              <div className="dg-q">Heures payées par agent et par jour ?</div>
+              <div className="dg-inrow"><span className="dg-slideval">{heuresAgentJour}</span><span className="dg-unit">heures / jour</span></div>
+              <input type="range" min={2} max={14} value={heuresAgentJour} onChange={(e) => setHeuresAgentJour(+e.target.value)} className="dg-range" />
+            </div>
+            <div className="dg-card">
+              <div className="dg-q">Fréquence des retards ou absences non signalés ?</div>
+              <Radio value={retards} onChange={setRetards} options={[
+                { v: "rare", l: "Rare" }, { v: "parfois", l: "Parfois" }, { v: "souvent", l: "Souvent" }]} />
+            </div>
+            <div className="dg-card">
+              <div className="dg-q">Fréquence des litiges clients ?</div>
+              <div className="dg-hint">Travail contesté, intervention à refaire, client mécontent.</div>
+              <Radio value={tauxLitige} onChange={setTauxLitige} options={[
+                { v: "rare", l: "Rare" }, { v: "parfois", l: "Parfois" }, { v: "souvent", l: "Souvent" }]} />
+            </div>
+            <div className="dg-card">
+              <div className="dg-q">Coût moyen d&apos;un litige ?</div>
+              <div className="dg-hint">Reprise, déplacement supplémentaire, geste commercial.</div>
+              <div className="dg-inrow">
+                <input type="number" className="dg-num" value={coutLitige} step={5000} onChange={(e) => setCoutLitige(+e.target.value || 0)} />
+                <span className="dg-unit">FCFA</span>
+              </div>
+            </div>
+            <div className="dg-card">
+              <div className="dg-q">Comment prouvez-vous le travail réalisé ?</div>
+              <Radio value={preuve} onChange={setPreuve} options={[
+                { v: "aucune", l: "Aucune preuve, on fait confiance" },
+                { v: "whatsapp", l: "Photos envoyées sur WhatsApp" },
+                { v: "papier", l: "Fiche papier signée" },
+                { v: "app", l: "Une application dédiée" }]} />
+            </div>
+            <div className="dg-nav">
+              <button className="dg-btn ghost" onClick={() => setStep(1)}>←</button>
+              <button className="dg-btn primary" disabled={!preuve} onClick={() => setStep(3)}>Continuer →</button>
+            </div>
+          </div>
+        )}
+
+        {/* ÉTAPE 3 — coordonnées */}
         {step === 3 && (
           <div className="dg-fade">
-            <div className="dg-eyebrow"><span className="dot" />Étape 3 · Contexte & coordonnées</div>
+            <div className="dg-eyebrow"><span className="dot" />Dernière étape</div>
             <h2 className="dg-h2">Presque terminé.</h2>
-            <div className="dg-card">
-              <div className="dg-q">Vendez-vous parfois à crédit ?</div>
-              <div className="dg-opts">
-                {[{ v: "oui_suivi", l: "Oui, et c'est dur à suivre" }, { v: "oui_ok", l: "Oui, mais je gère" }, { v: "non", l: "Non, paiement à la commande" }].map((o) => (
-                  <div key={o.v} className={"dg-opt radio " + (credit === o.v ? "sel" : "")} onClick={() => setCredit(o.v)}>
-                    <div className="dg-box"><Check /></div><div>{o.l}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="dg-card">
-              <div className="dg-q">Quand vous êtes absent, les commandes…</div>
-              <div className="dg-opts">
-                {[{ v: "bloque", l: "…s'arrêtent ou prennent du retard" }, { v: "erreurs", l: "…continuent mais avec plus d'erreurs" }, { v: "ok", l: "…tournent sans moi" }].map((o) => (
-                  <div key={o.v} className={"dg-opt radio " + (absence === o.v ? "sel" : "")} onClick={() => setAbsence(o.v)}>
-                    <div className="dg-box"><Check /></div><div>{o.l}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <p className="dg-lede">Pour vous envoyer votre diagnostic et vous recontacter si vous le souhaitez.</p>
             <div className="dg-card">
               <div className="dg-q" style={{ marginBottom: 12 }}>Vos informations</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -236,19 +388,18 @@ export default function DiagnosticPage() {
             </div>
             {err && <div className="dg-err">{err}</div>}
             <div className="dg-nav">
-              <button className="dg-btn ghost" onClick={() => setStep(2)}>←</button>
-              <button className="dg-btn gold" disabled={loading || !credit || !absence} onClick={() => submit("aucun")}>
+              <button className="dg-btn ghost" onClick={() => setStep(hasEngine ? 2 : 1)}>←</button>
+              <button className="dg-btn gold" disabled={loading} onClick={() => submit("aucun")}>
                 {loading ? <span className="dg-spin" /> : "Révéler mon diagnostic ✦"}
               </button>
             </div>
           </div>
         )}
 
-        {/* STEP 5 — résultat */}
+        {/* ÉTAPE 5 — résultat */}
         {step === 5 && result && (
-          <ResultView result={result} secteurCanal={canaux[0] || "WhatsApp"} cmdJour={cmdJour} minParCmd={minParCmd} tauxErreur={tauxErreur} coutErreur={coutErreur}
-            demoSent={demoSent}
-            onRestart={() => { setStep(0); setResult(null); setDemoSent(false); }} onCta={bookDemo} />
+          <ResultView result={result} canal={canaux[0] || "WhatsApp"} niche={niche || ""}
+            demoSent={demoSent} onRestart={resetAll} onCta={bookDemo} />
         )}
 
         <div className="dg-foot">Diagnostic confidentiel · Aucune donnée revendue · ~2 minutes</div>
@@ -257,18 +408,31 @@ export default function DiagnosticPage() {
   );
 }
 
-function ResultView({
-  result, secteurCanal, cmdJour, minParCmd, tauxErreur, coutErreur, demoSent, onRestart, onCta,
-}: {
-  result: ApiResult; secteurCanal: string; cmdJour: number; minParCmd: number;
-  tauxErreur: string; coutErreur: number; demoSent: boolean; onRestart: () => void; onCta: () => void;
+function Radio({ value, onChange, options }: {
+  value: string | null; onChange: (v: string) => void; options: { v: string; l: string }[];
 }) {
-  // niche autre que commandes → message simple
+  return (
+    <div className="dg-opts">
+      {options.map((o) => (
+        <div key={o.v} className={"dg-opt radio " + (value === o.v ? "sel" : "")} onClick={() => onChange(o.v)}>
+          <div className="dg-box"><Check /></div><div>{o.l}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ResultView({ result, canal, niche, demoSent, onRestart, onCta }: {
+  result: ApiResult; canal: string; niche: string; demoSent: boolean;
+  onRestart: () => void; onCta: () => void;
+}) {
   if (result.partiel || !result.calc) {
     return (
       <div className="dg-fade">
         <div className="dg-card" style={{ textAlign: "center" }}>
-          <div className="dg-tag" style={{ marginBottom: 12 }}>Besoin identifié : {result.niche}</div>
+          <div className="dg-tag" style={{ marginBottom: 12 }}>
+            Besoin identifié : {NICHE_LABELS[result.niche || "autre"]?.titre}
+          </div>
           <h2 className="dg-h2">Votre demande a bien été transmise.</h2>
           <p className="dg-lede">Un conseiller 221BelCode vous recontacte très vite pour un diagnostic détaillé.</p>
           <button className="dg-btn primary" onClick={onRestart}>↺ Refaire le diagnostic</button>
@@ -279,29 +443,40 @@ function ResultView({
   const c = result.calc;
   const sc = result.score ?? 0;
   const interp = sc >= 28 ? "client prioritaire" : sc >= 24 ? "très bonne opportunité" : sc >= 18 ? "bonne opportunité" : "à creuser";
+  const isInterv = niche === "interventions";
 
   return (
     <div className="dg-fade">
       <div className="dg-eyebrow"><span className="dot" />Votre diagnostic</div>
       <h2 className="dg-h2">Voici ce que nous avons compris de votre situation.</h2>
 
-      <div className="dg-mirror">
-        <div className="dg-li"><Check /><div>Vous traitez <b>~{cmdJour} commandes/jour</b>, surtout par {secteurCanal}.</div></div>
-        <div className="dg-li"><Check /><div>Les traiter à la main vous prend <b>~{c.volumes.heuresSemaine} h/semaine</b>.</div></div>
-        <div className="dg-li"><Check /><div>Sur un an, près de <b>{fcfa(c.pertes.totaleAn)}</b> de temps et d&apos;erreurs.</div></div>
-      </div>
-
       <div className="dg-stats">
-        <div className="dg-stat loss"><div className="k">Temps perdu</div><div className="v">{Math.round(c.volumes.heuresMois)} h</div><div className="sub">par mois en saisie</div></div>
-        <div className="dg-stat loss"><div className="k">Pertes / an</div><div className="v">{(c.pertes.totaleAn / 1e6).toFixed(1)}M</div><div className="sub">FCFA (temps + erreurs)</div></div>
-        <div className="dg-stat gain"><div className="k">Temps récupéré</div><div className="v">{Math.round(c.gains.tempsHeuresMois)} h</div><div className="sub">par mois avec le SaaS</div></div>
-        <div className="dg-stat gain"><div className="k">Économie / an</div><div className="v">{(c.gains.fcfaAn / 1e6).toFixed(1)}M</div><div className="sub">FCFA récupérables</div></div>
+        <div className="dg-stat loss">
+          <div className="k">{isInterv ? "Coordination" : "Temps perdu"}</div>
+          <div className="v">{Math.round(c.volumes.heuresMois)} h</div>
+          <div className="sub">par mois {isInterv ? "à suivre vos agents" : "en saisie"}</div>
+        </div>
+        <div className="dg-stat loss">
+          <div className="k">Pertes / an</div>
+          <div className="v">{(c.pertes.totaleAn / 1e6).toFixed(1)}M</div>
+          <div className="sub">FCFA estimés</div>
+        </div>
+        <div className="dg-stat gain">
+          <div className="k">Temps récupéré</div>
+          <div className="v">{Math.round(c.gains.tempsHeuresMois)} h</div>
+          <div className="sub">par mois avec le SaaS</div>
+        </div>
+        <div className="dg-stat gain">
+          <div className="k">Économie / an</div>
+          <div className="v">{(c.gains.fcfaAn / 1e6).toFixed(1)}M</div>
+          <div className="sub">FCFA récupérables</div>
+        </div>
       </div>
 
       <div className="dg-roi">
         <div className="k">Retour sur investissement</div>
         <div className="big">×{c.roi} <small>votre mise</small></div>
-        <div className="note">Pour ~{fcfa(c.prixSaaS)}/mois, vous récupéreriez de l&apos;ordre de <b>{fcfa(c.gains.fcfaMois)}/mois</b> de temps et d&apos;erreurs évitées.</div>
+        <div className="note">Pour ~{fcfa(c.prixSaaS)}/mois, vous récupéreriez de l&apos;ordre de <b>{fcfa(c.gains.fcfaMois)}/mois</b>.</div>
       </div>
 
       {result.apercu && (
@@ -310,7 +485,7 @@ function ResultView({
             {result.apercu.split(/\n\s*\n/).map((p, i) => <p key={i}>{p}</p>)}
           </div>
           <div className="dg-assume">
-            <b>Comment on a calculé :</b> sur la base de {cmdJour} commandes/jour × {minParCmd} min, un taux d&apos;erreur « {tauxErreur} » et {fcfa(coutErreur)} par erreur que vous avez indiqués. Chiffres indicatifs.
+            <b>Comment on a calculé :</b> uniquement à partir des chiffres que vous avez indiqués, avec des hypothèses de récupération prudentes. Chiffres indicatifs, à affiner ensemble.
           </div>
         </div>
       )}
@@ -322,13 +497,13 @@ function ResultView({
           </div>
           <h2 className="dg-h2" style={{ marginBottom: 6 }}>C&apos;est noté, merci !</h2>
           <p className="dg-lede" style={{ marginBottom: 0 }}>
-            Un conseiller 221BelCode vous recontacte très vite au numéro que vous avez indiqué, pour organiser votre démo. À très bientôt.
+            Un conseiller 221BelCode vous recontacte très vite au numéro que vous avez indiqué. À très bientôt.
           </p>
         </div>
       ) : (
         <div className="dg-card" style={{ textAlign: "center" }}>
           <div className="dg-tag" style={{ marginBottom: 12 }}>Score d&apos;opportunité : {sc}/30 · {interp}</div>
-          <h2 className="dg-h2" style={{ marginBottom: 6 }}>Envie de voir ça sur vos vraies commandes ?</h2>
+          <h2 className="dg-h2" style={{ marginBottom: 6 }}>Envie de voir ça sur vos vraies données ?</h2>
           <p className="dg-lede" style={{ marginBottom: 16 }}>Démo de 20 min, sans engagement.</p>
           <button className="dg-btn gold" onClick={onCta}>Réserver ma démo gratuite</button>
         </div>
@@ -396,9 +571,10 @@ const css = `
 .dg-btn.ghost{background:transparent;color:var(--ink);border-color:var(--line);flex:0 0 auto;padding:14px 18px}
 .dg-btn.gold{background:var(--gold);color:#2a2205}
 .dg-btn.gold:hover{background:#b8931f}
-.dg-mirror{border-left:3px solid var(--gold);padding:2px 0 2px 16px;margin:16px 0}
-.dg-li{display:flex;gap:9px;padding:6px 0;font-size:14.5px;align-items:flex-start}
-.dg-li .dg-check{width:17px;height:17px;opacity:1;transform:none;flex:0 0 auto;margin-top:2px}
+.dg-agent{display:flex;gap:11px;margin-bottom:16px;align-items:flex-start}
+.dg-av{width:34px;height:34px;border-radius:10px;flex:0 0 auto;background:linear-gradient(135deg,var(--brand),var(--brand-dk));color:#fff;display:grid;place-items:center;font-weight:800;font-size:13px;box-shadow:var(--shadow)}
+.dg-msg{background:#fff;border:1px solid var(--line);border-radius:4px 15px 15px 15px;padding:13px 15px;font-size:14.5px;box-shadow:var(--shadow)}
+.dg-who{font-size:11px;font-weight:700;color:var(--brand);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px}
 .dg-stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0}
 @media(max-width:460px){.dg-stats{grid-template-columns:1fr}}
 .dg-stat{border:1px solid var(--line);border-radius:14px;padding:16px;background:#fff}
