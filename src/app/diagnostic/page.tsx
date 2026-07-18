@@ -80,6 +80,15 @@ export default function DiagnosticPage() {
   const [heuresAgentJour, setHeuresAgentJour] = useState(8);
   const [preuve, setPreuve] = useState<string | null>(null);
 
+  // questions VALIDATIONS
+  const [demandesSemaine, setDemandesSemaine] = useState(20);
+  const [delaiValidationH, setDelaiValidationH] = useState("24");
+  const [nbValideurs, setNbValideurs] = useState(2);
+  const [montantMoyen, setMontantMoyen] = useState(50000);
+  const [minRechercheJour, setMinRechercheJour] = useState(20);
+  const [oublis, setOublis] = useState("parfois");
+  const [tracabilite, setTracabilite] = useState<string | null>(null);
+
   // coordonnées
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
@@ -114,6 +123,18 @@ export default function DiagnosticPage() {
     if (niche === "interventions") {
       return { ...base, nbAgents, intervJour, minCoordJour, tauxLitige, coutLitige, retards, heuresAgentJour, preuve };
     }
+    if (niche === "validations") {
+      return {
+        ...base,
+        demandesSemaine,
+        delaiValidationH: Number(delaiValidationH),
+        nbValideurs,
+        montantMoyen,
+        minRechercheJour,
+        oublis,
+        tracabilite,
+      };
+    }
     return base;
   }
 
@@ -144,7 +165,7 @@ export default function DiagnosticPage() {
   }
 
   const canStart = description.trim().length > 10 && secteur && canaux.length > 0;
-  const hasEngine = niche === "commandes" || niche === "interventions";
+  const hasEngine = niche === "commandes" || niche === "interventions" || niche === "validations";
   const railStep = step === 0 ? 0 : step === 1 ? 1 : step === 2 ? 2 : 3;
 
   function resetAll() {
@@ -173,7 +194,7 @@ export default function DiagnosticPage() {
             <p className="dg-lede">Décrivez avec vos mots comment ça se passe chez vous. Notre assistant identifiera votre besoin.</p>
             <div className="dg-card">
               <div className="dg-q">Racontez-nous votre quotidien</div>
-              <div className="dg-hint">Ex : « J&apos;ai 10 agents qui vont chez des clients, je ne sais jamais s&apos;ils sont arrivés à l&apos;heure. » ou « Mes clients commandent sur WhatsApp, je recopie tout à la main. »</div>
+              <div className="dg-hint">Ex : « J&apos;ai 10 agents qui vont chez des clients, je ne sais jamais s&apos;ils sont arrivés à l&apos;heure. » ou « Mes chefs de chantier demandent des achats par WhatsApp, je valide de tête. »</div>
               <textarea className="dg-ta" value={description} onChange={(e) => setDescription(e.target.value)}
                 placeholder="Décrivez votre activité et ce qui vous fait perdre du temps…" />
             </div>
@@ -372,6 +393,74 @@ export default function DiagnosticPage() {
           </div>
         )}
 
+        {/* ÉTAPE 2 — questions VALIDATIONS */}
+        {step === 2 && niche === "validations" && (
+          <div className="dg-fade">
+            <div className="dg-eyebrow"><span className="dot" />Étape 2 · Vos validations</div>
+            <h2 className="dg-h2">Parlons des demandes que vous devez autoriser.</h2>
+            <p className="dg-lede">Achats, avances, congés, sorties de matériel… Une estimation suffit.</p>
+
+            <div className="dg-card">
+              <div className="dg-q">Combien de demandes à valider par semaine ?</div>
+              <div className="dg-inrow"><span className="dg-slideval">{demandesSemaine}</span><span className="dg-unit">demandes / semaine</span></div>
+              <input type="range" min={2} max={150} value={demandesSemaine} onChange={(e) => setDemandesSemaine(+e.target.value)} className="dg-range" />
+            </div>
+
+            <div className="dg-card">
+              <div className="dg-q">Combien de temps avant qu&apos;une demande soit validée ?</div>
+              <div className="dg-hint">Entre le moment où on vous la soumet et votre réponse.</div>
+              <Radio value={delaiValidationH} onChange={setDelaiValidationH} options={[
+                { v: "2", l: "Moins de 2 heures" },
+                { v: "8", l: "Dans la journée" },
+                { v: "24", l: "Environ 1 jour" },
+                { v: "72", l: "2 à 3 jours" },
+                { v: "120", l: "Une semaine ou plus" }]} />
+            </div>
+
+            <div className="dg-card">
+              <div className="dg-q">Combien de personnes valident ces demandes ?</div>
+              <div className="dg-inrow"><span className="dg-slideval">{nbValideurs}</span><span className="dg-unit">valideurs</span></div>
+              <input type="range" min={1} max={15} value={nbValideurs} onChange={(e) => setNbValideurs(+e.target.value)} className="dg-range" />
+            </div>
+
+            <div className="dg-card">
+              <div className="dg-q">Montant moyen d&apos;une demande ?</div>
+              <div className="dg-inrow">
+                <input type="number" className="dg-num" value={montantMoyen} step={5000} onChange={(e) => setMontantMoyen(+e.target.value || 0)} />
+                <span className="dg-unit">FCFA</span>
+              </div>
+            </div>
+
+            <div className="dg-card">
+              <div className="dg-q">Arrive-t-il que des dépenses passent sans validation claire ?</div>
+              <div className="dg-hint">Achat fait avant l&apos;accord, montant qui a changé, facture qu&apos;on ne peut pas justifier.</div>
+              <Radio value={oublis} onChange={setOublis} options={[
+                { v: "rare", l: "Rarement" }, { v: "parfois", l: "Parfois" }, { v: "souvent", l: "Souvent" }]} />
+            </div>
+
+            <div className="dg-card">
+              <div className="dg-q">Temps passé chaque jour à retrouver qui a validé quoi ?</div>
+              <div className="dg-hint">Remonter dans WhatsApp, chercher un cahier, redemander à quelqu&apos;un.</div>
+              <div className="dg-inrow"><span className="dg-slideval">{minRechercheJour}</span><span className="dg-unit">minutes / jour</span></div>
+              <input type="range" min={0} max={180} step={5} value={minRechercheJour} onChange={(e) => setMinRechercheJour(+e.target.value)} className="dg-range" />
+            </div>
+
+            <div className="dg-card">
+              <div className="dg-q">Comment gardez-vous une trace des validations ?</div>
+              <Radio value={tracabilite} onChange={setTracabilite} options={[
+                { v: "aucun", l: "Aucune trace, c'est de mémoire" },
+                { v: "oral", l: "À l'oral, on se dit oui" },
+                { v: "whatsapp", l: "Messages WhatsApp" },
+                { v: "papier", l: "Cahier ou fiche papier" }]} />
+            </div>
+
+            <div className="dg-nav">
+              <button className="dg-btn ghost" onClick={() => setStep(1)}>←</button>
+              <button className="dg-btn primary" disabled={!tracabilite} onClick={() => setStep(3)}>Continuer →</button>
+            </div>
+          </div>
+        )}
+
         {/* ÉTAPE 3 — coordonnées */}
         {step === 3 && (
           <div className="dg-fade">
@@ -443,7 +532,14 @@ function ResultView({ result, canal, niche, demoSent, onRestart, onCta }: {
   const c = result.calc;
   const sc = result.score ?? 0;
   const interp = sc >= 28 ? "client prioritaire" : sc >= 24 ? "très bonne opportunité" : sc >= 18 ? "bonne opportunité" : "à creuser";
-  const isInterv = niche === "interventions";
+
+  // Libellés adaptés à la niche
+  const LIB: Record<string, { k: string; sub: string }> = {
+    commandes:     { k: "Temps perdu",  sub: "par mois en saisie" },
+    interventions: { k: "Coordination", sub: "par mois à suivre vos agents" },
+    validations:   { k: "Temps perdu",  sub: "par mois en attente et recherche" },
+  };
+  const lib = LIB[niche] || { k: "Temps perdu", sub: "par mois" };
 
   return (
     <div className="dg-fade">
@@ -452,9 +548,9 @@ function ResultView({ result, canal, niche, demoSent, onRestart, onCta }: {
 
       <div className="dg-stats">
         <div className="dg-stat loss">
-          <div className="k">{isInterv ? "Coordination" : "Temps perdu"}</div>
+          <div className="k">{lib.k}</div>
           <div className="v">{Math.round(c.volumes.heuresMois)} h</div>
-          <div className="sub">par mois {isInterv ? "à suivre vos agents" : "en saisie"}</div>
+          <div className="sub">{lib.sub}</div>
         </div>
         <div className="dg-stat loss">
           <div className="k">Pertes / an</div>
