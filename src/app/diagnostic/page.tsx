@@ -106,6 +106,7 @@ export default function DiagnosticPage() {
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
 
   const toggleCanal = (c: string) =>
     setCanaux((p) => (p.includes(c) ? p.filter((x) => x !== c) : [...p, c]));
@@ -129,7 +130,7 @@ export default function DiagnosticPage() {
 
   // ---- payload selon la niche ----
   function buildPayload(cta: string) {
-    const base = { description, secteur, canaux, niche, name, company, phone, cta };
+    const base = { description, secteur, canaux, niche, name, company, phone, email, cta };
     if (niche === "commandes") {
       return { ...base, cmdJour, minParCmd, tauxErreur, coutErreur, credit, absence };
     }
@@ -194,6 +195,8 @@ export default function DiagnosticPage() {
   }
 
   const canStart = description.trim().length > 10 && secteur && canaux.length > 0;
+  const emailValide = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
+  const peutSoumettre = name.trim().length > 1 && emailValide;
   const hasEngine = niche === "commandes" || niche === "interventions" || niche === "validations" || niche === "materiel";
   const railStep = step === 0 ? 0 : step === 1 ? 1 : step === 2 ? 2 : 3;
 
@@ -594,20 +597,26 @@ export default function DiagnosticPage() {
           <div className="dg-fade">
             <div className="dg-eyebrow"><span className="dot" />Dernière étape</div>
             <h2 className="dg-h2">Presque terminé.</h2>
-            <p className="dg-lede">Pour vous envoyer votre diagnostic et vous recontacter si vous le souhaitez.</p>
+            <p className="dg-lede">Nous vous envoyons votre diagnostic complet par email, pour que vous puissiez le relire tranquillement.</p>
             <div className="dg-card">
               <div className="dg-q" style={{ marginBottom: 12 }}>Vos informations</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <input className="dg-text" placeholder="Votre nom" value={name} onChange={(e) => setName(e.target.value)} />
                 <input className="dg-text" placeholder="Nom de l'entreprise" value={company} onChange={(e) => setCompany(e.target.value)} />
+                <input className="dg-text" type="email" placeholder="Votre email" value={email} onChange={(e) => setEmail(e.target.value)} />
                 <input className="dg-text" placeholder="Téléphone / WhatsApp" value={phone} onChange={(e) => setPhone(e.target.value)} />
               </div>
+              {email.length > 0 && !emailValide && (
+                <div style={{ fontSize: 13, color: "#B4451F", marginTop: 8 }}>
+                  Cet email ne semble pas valide.
+                </div>
+              )}
             </div>
             {err && <div className="dg-err">{err}</div>}
             <div className="dg-nav">
               <button className="dg-btn ghost" onClick={() => setStep(hasEngine ? 2 : 1)}>←</button>
-              <button className="dg-btn gold" disabled={loading} onClick={() => submit("aucun")}>
-                {loading ? <span className="dg-spin" /> : "Révéler mon diagnostic ✦"}
+              <button className="dg-btn gold" disabled={loading || !peutSoumettre} onClick={() => submit("aucun")}>
+                {loading ? <span className="dg-spin" /> : "Recevoir mon diagnostic ✦"}
               </button>
             </div>
           </div>
