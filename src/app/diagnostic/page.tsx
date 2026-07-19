@@ -7,7 +7,10 @@ import { useState } from "react";
    1. Description libre  -> /api/diagnostic-niche (Claude détecte)
    2. Écran "voici votre besoin" (corrigeable)
    3. Questions de LA niche détectée
-   4. /api/diagnostic -> diagnostic complet
+   4. Coordonnées (email obligatoire)
+   5. /api/diagnostic -> diagnostic complet
+   NB : le noeud n8n d'envoi email existe mais est DESACTIVE
+   (pas de domaine verifie dans Resend). Les emails sont collectes en base.
    ============================================================ */
 
 type Calc = {
@@ -105,8 +108,8 @@ export default function DiagnosticPage() {
   // coordonnées
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
-  const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
 
   const toggleCanal = (c: string) =>
     setCanaux((p) => (p.includes(c) ? p.filter((x) => x !== c) : [...p, c]));
@@ -597,7 +600,7 @@ export default function DiagnosticPage() {
           <div className="dg-fade">
             <div className="dg-eyebrow"><span className="dot" />Dernière étape</div>
             <h2 className="dg-h2">Presque terminé.</h2>
-            <p className="dg-lede">Nous vous envoyons votre diagnostic complet par email, pour que vous puissiez le relire tranquillement.</p>
+            <p className="dg-lede">Pour vous transmettre votre diagnostic et vous recontacter si vous le souhaitez.</p>
             <div className="dg-card">
               <div className="dg-q" style={{ marginBottom: 12 }}>Vos informations</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -607,16 +610,14 @@ export default function DiagnosticPage() {
                 <input className="dg-text" placeholder="Téléphone / WhatsApp" value={phone} onChange={(e) => setPhone(e.target.value)} />
               </div>
               {email.length > 0 && !emailValide && (
-                <div style={{ fontSize: 13, color: "#B4451F", marginTop: 8 }}>
-                  Cet email ne semble pas valide.
-                </div>
+                <div className="dg-warn">Cet email ne semble pas valide.</div>
               )}
             </div>
             {err && <div className="dg-err">{err}</div>}
             <div className="dg-nav">
               <button className="dg-btn ghost" onClick={() => setStep(hasEngine ? 2 : 1)}>←</button>
               <button className="dg-btn gold" disabled={loading || !peutSoumettre} onClick={() => submit("aucun")}>
-                {loading ? <span className="dg-spin" /> : "Recevoir mon diagnostic ✦"}
+                {loading ? <span className="dg-spin" /> : "Révéler mon diagnostic ✦"}
               </button>
             </div>
           </div>
@@ -781,6 +782,7 @@ const css = `
 .dg-text,.dg-num{width:100%;font-family:inherit;font-size:15px;padding:13px 14px;border:1.5px solid var(--line);border-radius:11px}
 .dg-num{font-size:20px;font-weight:700}
 .dg-ta:focus,.dg-text:focus,.dg-num:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px #0b6e4f22}
+.dg-warn{font-size:13px;color:var(--alert);margin-top:8px}
 .dg-opts{display:flex;flex-direction:column;gap:9px}
 .dg-opts.grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
 @media(max-width:460px){.dg-opts.grid{grid-template-columns:1fr}}
