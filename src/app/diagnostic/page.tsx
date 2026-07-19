@@ -89,6 +89,19 @@ export default function DiagnosticPage() {
   const [oublis, setOublis] = useState("parfois");
   const [tracabilite, setTracabilite] = useState<string | null>(null);
 
+  // questions MATERIEL
+  const [nbEquipements, setNbEquipements] = useState(150);
+  const [valeurParc, setValeurParc] = useState(25000000);
+  const [tauxPerte, setTauxPerte] = useState("parfois");
+  const [rechercheSemaine, setRechercheSemaine] = useState(10);
+  const [minParRecherche, setMinParRecherche] = useState(20);
+  const [freqInventaireAn, setFreqInventaireAn] = useState("2");
+  const [heuresInventaire, setHeuresInventaire] = useState(20);
+  const [blocagesMois, setBlocagesMois] = useState(4);
+  const [coutBlocage, setCoutBlocage] = useState(25000);
+  const [suiviMaintenance, setSuiviMaintenance] = useState("partiel");
+  const [suiviParc, setSuiviParc] = useState<string | null>(null);
+
   // coordonnées
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
@@ -135,6 +148,22 @@ export default function DiagnosticPage() {
         tracabilite,
       };
     }
+    if (niche === "materiel") {
+      return {
+        ...base,
+        nbEquipements,
+        valeurParc,
+        tauxPerte,
+        rechercheSemaine,
+        minParRecherche,
+        freqInventaireAn: Number(freqInventaireAn),
+        heuresInventaire,
+        blocagesMois,
+        coutBlocage,
+        suiviMaintenance,
+        suiviParc,
+      };
+    }
     return base;
   }
 
@@ -165,7 +194,7 @@ export default function DiagnosticPage() {
   }
 
   const canStart = description.trim().length > 10 && secteur && canaux.length > 0;
-  const hasEngine = niche === "commandes" || niche === "interventions" || niche === "validations";
+  const hasEngine = niche === "commandes" || niche === "interventions" || niche === "validations" || niche === "materiel";
   const railStep = step === 0 ? 0 : step === 1 ? 1 : step === 2 ? 2 : 3;
 
   function resetAll() {
@@ -194,7 +223,7 @@ export default function DiagnosticPage() {
             <p className="dg-lede">Décrivez avec vos mots comment ça se passe chez vous. Notre assistant identifiera votre besoin.</p>
             <div className="dg-card">
               <div className="dg-q">Racontez-nous votre quotidien</div>
-              <div className="dg-hint">Ex : « J&apos;ai 10 agents qui vont chez des clients, je ne sais jamais s&apos;ils sont arrivés à l&apos;heure. » ou « Mes chefs de chantier demandent des achats par WhatsApp, je valide de tête. »</div>
+              <div className="dg-hint">Ex : « J&apos;ai 10 agents qui vont chez des clients, je ne sais jamais s&apos;ils sont arrivés à l&apos;heure. » ou « Mes outils partent sur les chantiers et je ne sais jamais qui les a pris. »</div>
               <textarea className="dg-ta" value={description} onChange={(e) => setDescription(e.target.value)}
                 placeholder="Décrivez votre activité et ce qui vous fait perdre du temps…" />
             </div>
@@ -461,6 +490,105 @@ export default function DiagnosticPage() {
           </div>
         )}
 
+        {/* ÉTAPE 2 — questions MATÉRIEL */}
+        {step === 2 && niche === "materiel" && (
+          <div className="dg-fade">
+            <div className="dg-eyebrow"><span className="dot" />Étape 2 · Votre parc</div>
+            <h2 className="dg-h2">Parlons de vos équipements.</h2>
+            <p className="dg-lede">Outils, machines, véhicules, groupes électrogènes… Une estimation suffit.</p>
+
+            <div className="dg-card">
+              <div className="dg-q">Combien d&apos;équipements suivez-vous ?</div>
+              <div className="dg-inrow"><span className="dg-slideval">{nbEquipements}</span><span className="dg-unit">équipements</span></div>
+              <input type="range" min={10} max={1000} step={10} value={nbEquipements} onChange={(e) => setNbEquipements(+e.target.value)} className="dg-range" />
+            </div>
+
+            <div className="dg-card">
+              <div className="dg-q">Valeur totale approximative de votre parc ?</div>
+              <div className="dg-hint">Ce que ça coûterait de tout racheter aujourd&apos;hui.</div>
+              <div className="dg-inrow">
+                <input type="number" className="dg-num" value={valeurParc} step={1000000} onChange={(e) => setValeurParc(+e.target.value || 0)} />
+                <span className="dg-unit">FCFA</span>
+              </div>
+            </div>
+
+            <div className="dg-card">
+              <div className="dg-q">Fréquence du matériel perdu, volé ou non restitué ?</div>
+              <Radio value={tauxPerte} onChange={setTauxPerte} options={[
+                { v: "rare", l: "Rare — ça n'arrive presque jamais" },
+                { v: "parfois", l: "Parfois — quelques cas par an" },
+                { v: "souvent", l: "Souvent — c'est un vrai problème" }]} />
+            </div>
+
+            <div className="dg-card">
+              <div className="dg-q">Combien de fois par semaine cherchez-vous un équipement ?</div>
+              <div className="dg-hint">« Où est la bétonnière ? », « Qui a pris la perceuse ? »</div>
+              <div className="dg-inrow"><span className="dg-slideval">{rechercheSemaine}</span><span className="dg-unit">recherches / semaine</span></div>
+              <input type="range" min={0} max={60} value={rechercheSemaine} onChange={(e) => setRechercheSemaine(+e.target.value)} className="dg-range" />
+            </div>
+
+            <div className="dg-card">
+              <div className="dg-q">Temps moyen pour retrouver un équipement ?</div>
+              <div className="dg-inrow"><span className="dg-slideval">{minParRecherche}</span><span className="dg-unit">minutes</span></div>
+              <input type="range" min={2} max={120} value={minParRecherche} onChange={(e) => setMinParRecherche(+e.target.value)} className="dg-range" />
+            </div>
+
+            <div className="dg-card">
+              <div className="dg-q">Combien de fois par mois un travail est-il retardé faute de trouver le bon matériel ?</div>
+              <div className="dg-hint">Chantier à l&apos;arrêt, équipe qui attend, location de remplacement en urgence.</div>
+              <div className="dg-inrow"><span className="dg-slideval">{blocagesMois}</span><span className="dg-unit">fois / mois</span></div>
+              <input type="range" min={0} max={30} value={blocagesMois} onChange={(e) => setBlocagesMois(+e.target.value)} className="dg-range" />
+            </div>
+
+            <div className="dg-card">
+              <div className="dg-q">Combien vous coûte un de ces blocages ?</div>
+              <div className="dg-hint">Location d&apos;urgence, heures perdues, retard facturé.</div>
+              <div className="dg-inrow">
+                <input type="number" className="dg-num" value={coutBlocage} step={5000} onChange={(e) => setCoutBlocage(+e.target.value || 0)} />
+                <span className="dg-unit">FCFA</span>
+              </div>
+            </div>
+
+            <div className="dg-card">
+              <div className="dg-q">Combien de fois par an faites-vous l&apos;inventaire ?</div>
+              <Radio value={freqInventaireAn} onChange={setFreqInventaireAn} options={[
+                { v: "0", l: "Jamais" },
+                { v: "1", l: "Une fois par an" },
+                { v: "2", l: "Deux fois par an" },
+                { v: "4", l: "Chaque trimestre" },
+                { v: "12", l: "Chaque mois" }]} />
+            </div>
+
+            <div className="dg-card">
+              <div className="dg-q">Combien d&apos;heures prend un inventaire complet ?</div>
+              <div className="dg-inrow"><span className="dg-slideval">{heuresInventaire}</span><span className="dg-unit">heures</span></div>
+              <input type="range" min={0} max={160} step={2} value={heuresInventaire} onChange={(e) => setHeuresInventaire(+e.target.value)} className="dg-range" />
+            </div>
+
+            <div className="dg-card">
+              <div className="dg-q">Suivez-vous l&apos;entretien de vos équipements ?</div>
+              <Radio value={suiviMaintenance} onChange={setSuiviMaintenance} options={[
+                { v: "suivi", l: "Oui, avec un calendrier d'entretien" },
+                { v: "partiel", l: "Un peu, mais pas systématiquement" },
+                { v: "aucun", l: "Non, on répare quand ça casse" }]} />
+            </div>
+
+            <div className="dg-card">
+              <div className="dg-q">Comment savez-vous qui détient quoi aujourd&apos;hui ?</div>
+              <Radio value={suiviParc} onChange={setSuiviParc} options={[
+                { v: "aucun", l: "On ne sait pas vraiment" },
+                { v: "cahier", l: "Un cahier de sortie" },
+                { v: "excel", l: "Un fichier Excel" },
+                { v: "app", l: "Une application dédiée" }]} />
+            </div>
+
+            <div className="dg-nav">
+              <button className="dg-btn ghost" onClick={() => setStep(1)}>←</button>
+              <button className="dg-btn primary" disabled={!suiviParc} onClick={() => setStep(3)}>Continuer →</button>
+            </div>
+          </div>
+        )}
+
         {/* ÉTAPE 3 — coordonnées */}
         {step === 3 && (
           <div className="dg-fade">
@@ -538,6 +666,7 @@ function ResultView({ result, canal, niche, demoSent, onRestart, onCta }: {
     commandes:     { k: "Temps perdu",  sub: "par mois en saisie" },
     interventions: { k: "Coordination", sub: "par mois à suivre vos agents" },
     validations:   { k: "Temps perdu",  sub: "par mois en attente et recherche" },
+    materiel:      { k: "Temps perdu",  sub: "par mois à chercher et inventorier" },
   };
   const lib = LIB[niche] || { k: "Temps perdu", sub: "par mois" };
 
