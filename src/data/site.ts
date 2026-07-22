@@ -146,7 +146,7 @@ export const projects: Project[] = [
     title: "EduConnect",
     description:
       "Plateforme de gestion scolaire complète : espaces élèves, enseignants et administration unifiée.",
-    technologies: ["Flutter", "Django", "PostgreSQL"],
+    technologies: ["Application mobile", "Multi-rôles", "Temps réel"],
     accent: "from-blue-500/20 to-cyan-500/10",
     available: false,
   },
@@ -156,7 +156,7 @@ export const projects: Project[] = [
     title: "SamaSchool",
     description:
       "SaaS multi-établissements avec bulletins PDF, QR anti-fraude et rôles finement gérés.",
-    technologies: ["Next.js", "Supabase", "React PDF"],
+    technologies: ["Multi-établissements", "Bulletins PDF", "QR anti-fraude"],
     accent: "from-cyan-500/20 to-blue-500/10",
     available: false,
   },
@@ -166,7 +166,7 @@ export const projects: Project[] = [
     title: "FacturePilote",
     description:
       "Facturation en ligne avec numérotation automatique, paiements intégrés et suivi des règlements.",
-    technologies: ["Next.js", "Supabase", "Stripe"],
+    technologies: ["Facturation", "Paiements en ligne", "Suivi des règlements"],
     accent: "from-violet-500/20 to-blue-500/10",
     available: false,
   },
@@ -176,7 +176,7 @@ export const projects: Project[] = [
     title: "CareHome Pro",
     description:
       "Solution pour maisons de repos en Belgique et aux Pays-Bas, bilingue et centrée sur la conformité.",
-    technologies: ["Next.js", "Supabase", "next-intl"],
+    technologies: ["Bilingue FR/NL", "Conformité", "Multi-sites"],
     accent: "from-blue-500/20 to-violet-500/10",
     available: false,
   },
@@ -186,7 +186,7 @@ export const projects: Project[] = [
     title: "ImmoTeranga",
     description:
       "SaaS immobilier pour le marché sénégalais avec agences vitrines et activation à la demande.",
-    technologies: ["Next.js", "Supabase", "Cloudflare"],
+    technologies: ["Immobilier", "Agences vitrines", "Activation à la demande"],
     accent: "from-cyan-500/20 to-violet-500/10",
     available: false,
   },
@@ -196,7 +196,7 @@ export const projects: Project[] = [
     title: "Plateforme QR Inventaire",
     description:
       "Gestion d'actifs avec étiquettes QR, campagnes d'inventaire par caméra et rapports PDF.",
-    technologies: ["Next.js", "Supabase", "html5-qrcode"],
+    technologies: ["Étiquettes QR", "Scan caméra", "Rapports PDF"],
     accent: "from-blue-500/20 to-cyan-500/10",
     available: false,
   },
